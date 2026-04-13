@@ -534,30 +534,11 @@ async function refreshAll(){
   for(const kod of tekKodlar){
     toast(`⏳ ${kod}...`,'i',1500);
     try{
-      // TEFAS - allorigins proxy (güvenilir, ücretsiz)
-      const tarih0=new Date();
-      const tt=`${String(tarih0.getDate()).padStart(2,'0')}.${String(tarih0.getMonth()+1).padStart(2,'0')}.${tarih0.getFullYear()}`;
-      const tefasPayload=`fontip=YAT&fongrup=&fonkod=${encodeURIComponent(kod)}&bastarih=${tt}&bittarih=${tt}&fonturkod=&fonunvantip=&sfontur=`;
-      const tefasTarget='https://www.tefas.gov.tr/api/DB/BindHistoryInfo';
-      const tefasR=await fetch('/.netlify/functions/tefas', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'fonkod=KLU'}).then(r=>r.json()).then(d=>console.log(d)).catch(e=>console.log('HATA:',e))
-      if(tefasR&&tefasR.ok){
-        const j=await tefasR.json().catch(()=>null);
-        const rows=j?.data||j?.Data||[];
-        if(rows.length>0){
-          const row=rows[0];
-          for(const alan of ['BORSABULTENFIYAT','FIYAT','BirimPayDegeri']){
-            if(row[alan]&&row[alan]!=='-'){
-              const fiyat=parseFloat(row[alan].toString().replace(',','.'));
-              if(fiyat>0){fmap[kod]=fiyat;ok++;break;}
-            }
-          }
-          if(fmap[kod]!==undefined) continue;
-        }
-      }
+ try{
+      const r=await fetch('/.netlify/functions/tefas',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`fonkod=${encodeURIComponent(kod)}`});
+      if(r.ok){const j=await r.json();if(j.fiyat>0){fmap[kod]=j.fiyat;ok++;continue;}}
     }catch(e){}
-    hat.push(kod);
-  }
-
+    hat.push(kod);    
   fonlar=fonlar.map(f=>({...f,guncelFiyat:fmap[f.kod]!==undefined?fmap[f.kod]:(f.guncelFiyat??null)}));
   DB.save('fonlar',fonlar);
 
