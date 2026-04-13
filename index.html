@@ -539,7 +539,7 @@ async function refreshAll(){
       const tt=`${String(tarih0.getDate()).padStart(2,'0')}.${String(tarih0.getMonth()+1).padStart(2,'0')}.${tarih0.getFullYear()}`;
       const tefasPayload=`fontip=YAT&fongrup=&fonkod=${encodeURIComponent(kod)}&bastarih=${tt}&bittarih=${tt}&fonturkod=&fonunvantip=&sfontur=`;
       const tefasTarget='https://www.tefas.gov.tr/api/DB/BindHistoryInfo';
-      const tefasR=await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(tefasTarget)}&method=POST&data=${encodeURIComponent(tefasPayload)}`).catch(()=>null);
+      const tefasR=await fetch('/.netlify/functions/tefas', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'fonkod=KLU'}).then(r=>r.json()).then(d=>console.log(d)).catch(e=>console.log('HATA:',e))
       if(tefasR&&tefasR.ok){
         const j=await tefasR.json().catch(()=>null);
         const rows=j?.data||j?.Data||[];
