@@ -1,2 +1,12 @@
 [build]
   functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/metals"
+  to = "/.netlify/functions/metals"
+  status = 200
+
+[[redirects]]
+  from = "/api/tefas"
+  to = "/.netlify/functions/tefas"
+  status = 200
