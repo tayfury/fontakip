@@ -4,6 +4,7 @@ exports.handler = async (event) => {
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
   };
 
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: cors, body: '' };
@@ -62,27 +63,6 @@ exports.handler = async (event) => {
       } catch(e) {}
     }
   }
-
-  try {
-    const r = await fetch(`https://www.tefas.gov.tr/FonAnaliz.aspx?FonKod=${fonKod}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'text/html' }
-    });
-    if (r.ok) {
-      const html = await r.text();
-      const patterns = [
-        /LabelPriceValue[^>]*>([0-9]+[,\.][0-9]+)/,
-        /"BORSABULTENFIYAT"\s*:\s*"([0-9]+[,\.][0-9]+)"/i,
-        /id="[^"]*Price[^"]*"[^>]*>([0-9]+[,\.][0-9]+)/i,
-      ];
-      for (const pat of patterns) {
-        const m = html.match(pat);
-        if (m) {
-          const fiyat = parseFloat(m[1].replace(',', '.'));
-          if (fiyat > 0) return { statusCode: 200, headers: cors, body: JSON.stringify({ fiyat, kaynak: 'HTML', fonKod }) };
-        }
-      }
-    }
-  } catch(e) {}
 
   return {
     statusCode: 404, headers: cors,
