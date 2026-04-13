@@ -464,36 +464,18 @@ function updateKurUI(){
 // ══ OTOMATİK ÇEK ══
 async function fetchAuto(){
   try{
-    let usd=null,eur=null,goldUsdOz=null,silverUsdOz=null;
-    const TROY=31.1035;
-    try{
-      const r=await fetch('https://open.er-api.com/v6/latest/USD');
-      if(r.ok){const d=await r.json();usd=d.rates?.TRY||null;if(usd&&d.rates?.EUR)eur=usd/d.rates.EUR;}
-    }catch(e){}
-    if(!usd){
-      try{
-        const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-        if(r.ok){const d=await r.json();usd=d.rates?.TRY||null;if(usd&&d.rates?.EUR)eur=usd/d.rates.EUR;}
-      }catch(e){}
+    const r=await fetch('/api/metals');
+    if(r.ok){
+      const d=await r.json();
+      // Sadece mevcut değer yoksa otomatik doldur (manuel öncelikli)
+      if(d.usd&&!kurlar.usd) kurlar.usd=d.usd;
+      if(d.eur&&!kurlar.eur) kurlar.eur=d.eur;
+      if(d.goldTryGram&&!kurlar.altin) kurlar.altin=d.goldTryGram;
+      if(d.silverTryGram&&!kurlar.gumus) kurlar.gumus=d.silverTryGram;
+      DB.save('kurlar',kurlar);
+      updateKurUI();
+      return d;
     }
-    try{
-      const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json');
-      if(r.ok){const d=await r.json();goldUsdOz=d.xau?.usd||null;}
-    }catch(e){}
-    try{
-      const r=await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xag.json');
-      if(r.ok){const d=await r.json();silverUsdOz=d.xag?.usd||null;}
-    }catch(e){}
-    const goldTryGram=goldUsdOz&&usd?(goldUsdOz*usd)/TROY:null;
-    const silverTryGram=silverUsdOz&&usd?(silverUsdOz*usd)/TROY:null;
-    const d={usd,eur,goldTryGram,silverTryGram};
-    if(d.usd)kurlar.usd=d.usd;
-    if(d.eur)kurlar.eur=d.eur;
-    if(d.goldTryGram)kurlar.altin=d.goldTryGram;
-    if(d.silverTryGram)kurlar.gumus=d.silverTryGram;
-    DB.save('kurlar',kurlar);
-    updateKurUI();
-    return d;
   }catch(e){}
   return null;
 }
@@ -502,28 +484,34 @@ async function refreshAll(){
   const btn=document.getElementById('rbtn');
   btn.disabled=true;
   btn.innerHTML=`<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg> Güncelleniyor...`;
+
   toast('💱 Döviz & altın/gümüş çekiliyor...','i',3000);
+  // Otomatik çekmede mevcut kurları sıfırla ki yenisi gelsin
   kurlar.usd=null;kurlar.eur=null;kurlar.altin=null;kurlar.gumus=null;
   const meta=await fetchAuto();
+
   const tekKodlar=[...new Set(fonlar.map(f=>f.kod))];
   const fmap={};let ok=0;const hat=[];
   for(const kod of tekKodlar){
     toast(`⏳ ${kod}...`,'i',1500);
     try{
-      const r=await fetch('/.netlify/functions/tefas',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`fonkod=${encodeURIComponent(kod)}`});
+      const r=await fetch('/api/tefas',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`fonkod=${encodeURIComponent(kod)}`});
       if(r.ok){const j=await r.json();if(j.fiyat>0){fmap[kod]=j.fiyat;ok++;continue;}}
     }catch(e){}
     hat.push(kod);
   }
+
   fonlar=fonlar.map(f=>({...f,guncelFiyat:fmap[f.kod]!==undefined?fmap[f.kod]:(f.guncelFiyat??null)}));
   DB.save('fonlar',fonlar);
+
   const now=new Date();
   document.getElementById('updTime').textContent=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   btn.disabled=false;
   btn.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg> Otomatik Çek (TEFAS + Döviz)`;
   renderAna();
+
   const dMsg=meta?(kurlar.altin?`Altın: ${TL(kurlar.altin)}/gr`:'Altın çekilemedi'):'Döviz alınamadı';
-  if(hat.length) toast(`✅ ${ok} fon | ${dMsg} | ⚠️ ${hat.join(',')}` ,'i',5000);
+  if(hat.length) toast(`✅ ${ok} fon | ${dMsg} | ⚠️ ${hat.join(',')} ','i',5000);
   else toast(`✅ ${ok} fon + döviz güncellendi!`,'s');
 }
 
