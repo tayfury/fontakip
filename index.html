@@ -511,7 +511,7 @@ async function refreshAll(){
   renderAna();
 
   const dMsg=meta?(kurlar.altin?`Altın: ${TL(kurlar.altin)}/gr`:'Altın çekilemedi'):'Döviz alınamadı';
-  if(hat.length) toast(`✅ ${ok} fon | ${dMsg} | ⚠️ ${hat.join(',')} ','i',5000);
+  if(hat.length) toast(`✅ ${ok} fon | ${dMsg} | ⚠️ ${hat.join(',')}` ,'i',5000);
   else toast(`✅ ${ok} fon + döviz güncellendi!`,'s');
 }
 
