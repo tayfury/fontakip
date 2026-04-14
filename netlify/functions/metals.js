@@ -11,10 +11,9 @@ exports.handler = async (event) => {
 
   const result = { usd: null, eur: null, goldTryGram: null, silverTryGram: null, goldUsdOz: null, silverUsdOz: null };
   const TROY = 31.1035;
-  const cb = `_cb=${Date.now()}`;
 
   try {
-    const r = await fetch(`https://open.er-api.com/v6/latest/USD?${cb}`, {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD', {
       headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'Mozilla/5.0' }
     });
     if (r.ok) {
@@ -26,7 +25,7 @@ exports.handler = async (event) => {
 
   if (!result.usd) {
     try {
-      const r = await fetch(`https://api.exchangerate-api.com/v4/latest/USD?${cb}`, {
+      const r = await fetch('https://api.exchangerate-api.com/v4/latest/USD', {
         headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'Mozilla/5.0' }
       });
       if (r.ok) {
@@ -38,5 +37,31 @@ exports.handler = async (event) => {
   }
 
   try {
-    const r = await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json?${cb}`, {
+    const r = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json', {
       headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'Mozilla/5.0' }
+    });
+    if (r.ok) {
+      const d = await r.json();
+      result.goldUsdOz = d.xau?.usd || null;
+    }
+  } catch(e) {}
+
+  try {
+    const r = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xag.json', {
+      headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'Mozilla/5.0' }
+    });
+    if (r.ok) {
+      const d = await r.json();
+      result.silverUsdOz = d.xag?.usd || null;
+    }
+  } catch(e) {}
+
+  if (result.goldUsdOz && result.usd) result.goldTryGram = (result.goldUsdOz * result.usd) / TROY;
+  if (result.silverUsdOz && result.usd) result.silverTryGram = (result.silverUsdOz * result.usd) / TROY;
+
+  return {
+    statusCode: 200,
+    headers: cors,
+    body: JSON.stringify({ ...result, timestamp: new Date().toISOString() })
+  };
+};
