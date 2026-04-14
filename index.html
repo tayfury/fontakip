@@ -194,6 +194,15 @@ canvas{width:100%!important;max-height:200px}
 .empty p{font-size:13px;line-height:1.6}
 .rc{font-size:11px;color:var(--t3);margin-bottom:8px;font-family:'DM Mono',monospace}
 .div{height:1px;background:var(--border);margin:12px 0}
+/* FON FİYAT GÜNCELLE */
+.fiyat-input-wrap{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);align-items:center}
+.fiyat-input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs);padding:7px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;-webkit-appearance:none}
+.fiyat-input:focus{border-color:var(--gold)}
+.fiyat-input::placeholder{color:var(--t3)}
+.fiyat-kaydet{background:linear-gradient(135deg,var(--gold),#d97706);color:#fff;border:none;border-radius:var(--rs);padding:7px 12px;font-family:'Syne',sans-serif;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+.fiyat-kaydet:active{opacity:.8}
+.fiyat-label{font-size:10px;color:var(--t3);white-space:nowrap}
+
 </style>
 </head>
 <body>
@@ -515,6 +524,33 @@ async function refreshAll(){
   else toast(`✅ ${ok} fon + döviz güncellendi!`,'s');
 }
 
+
+// ══ FON FİYAT GÜNCELLE ══
+function fonFiyatGuncelle(kod){
+  const inp=document.getElementById('fiyat-inp-'+kod);
+  if(!inp) return;
+  const fiyat=parseFloat(inp.value.replace(',','.'));
+  if(!fiyat||fiyat<=0){toast('Geçerli bir fiyat girin','e');return;}
+  fonlar=fonlar.map(f=>f.kod===kod?{...f,guncelFiyat:fiyat}:f);
+  DB.save('fonlar',fonlar);
+  renderAna();
+  toast(`✅ ${kod} fiyatı güncellendi: ₺${fiyat}`,'s');
+}
+
+
+function fonFiyatGuncelle2(id){
+  const inp=document.getElementById('fiyat-inp-'+id);
+  if(!inp) return;
+  const fiyat=parseFloat(inp.value.replace(',','.'));
+  if(!fiyat||fiyat<=0){toast('Geçerli bir fiyat girin','e');return;}
+  const fon=fonlar.find(f=>f.id===id);
+  if(!fon) return;
+  fonlar=fonlar.map(f=>f.id===id?{...f,guncelFiyat:fiyat}:f);
+  DB.save('fonlar',fonlar);
+  renderAna();
+  toast(`✅ ${fon.kod} fiyatı: ₺${fiyat}`,'s');
+}
+
 // ══ FON CRUD ══
 function swFTab(t){
   ['fon','dvz'].forEach(x=>{
@@ -645,6 +681,11 @@ function renderFonList(){
         <div class="fst"><div class="fl">K/Z</div><div class="fv" style="color:${kz!==null?(pos?'var(--g2)':'var(--r2)'):'var(--t3)'}">${kz!==null?TL(kz):'—'}</div></div>
       </div>
       ${pct!==null?`<div class="ffoot"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:10px;color:var(--t3)">Getiri</span><span style="font-size:11px;font-family:'DM Mono',monospace;font-weight:700;color:${pos?'var(--g2)':'var(--r2)'}">${PCT(pct)}</span></div><div class="pbar"><div class="pbf ${pos?'p':'n'}" style="width:${Math.min(Math.abs(pct),50)/50*100}%"></div></div></div>`:''}
+      <div class="fiyat-input-wrap">
+        <span class="fiyat-label">💹 Fiyat Gir:</span>
+        <input class="fiyat-input" id="fiyat-inp-${f.id}" type="number" placeholder="${f.guncelFiyat?N(f.guncelFiyat,4):'₺ girin'}" step="0.0001" inputmode="decimal">
+        <button class="fiyat-kaydet" onclick="fonFiyatGuncelle2('${f.id}')">Kaydet</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -777,42 +818,4 @@ function renderCharts(){
     if(charts[id])charts[id].destroy();if(!lbl.length)return;
     charts[id]=new Chart(document.getElementById(id),{type:t,
       data:{labels:lbl,datasets:[{data:dat,backgroundColor:pal,borderWidth:0,hoverOffset:6}]},
-      options:{responsive:true,plugins:{legend:{position:'bottom',labels:{padding:10,font:{size:10}}}}}
-    });
-  };
-  const km={};fonlar.forEach(f=>{const d=f.guncelFiyat?f.adet*f.guncelFiyat:f.adet*f.alisFiyat;km[f.sahibi]=(km[f.sahibi]||0)+d;});
-  mkD('cFonKisi',Object.keys(km),Object.values(km));
-  const fm={};fonlar.forEach(f=>{if(!f.guncelFiyat)return;const m=f.adet*f.alisFiyat,d=f.adet*f.guncelFiyat;if(!fm[f.kod])fm[f.kod]={m:0,d:0};fm[f.kod].m+=m;fm[f.kod].d+=d;});
-  const labs=[],vals=[],cols=[];
-  Object.entries(fm).forEach(([k,v])=>{const p=v.m>0?((v.d-v.m)/v.m)*100:0;labs.push(k);vals.push(+p.toFixed(2));cols.push(p>=0?'rgba(16,185,129,.8)':'rgba(239,68,68,.8)');});
-  if(charts.cFonKZ)charts.cFonKZ.destroy();
-  if(labs.length)charts.cFonKZ=new Chart(document.getElementById('cFonKZ'),{type:'bar',
-    data:{labels:labs,datasets:[{data:vals,backgroundColor:cols,borderRadius:5,borderWidth:0}]},
-    options:{responsive:true,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{callback:v=>v+'%'}},y:{grid:{display:false}}}}
-  });
-  const cm={};dovizler.forEach(d=>{const k=ICON[d.cins]||''+ ' '+d.cins;cm[k]=(cm[k]||0)+d.alisTL;});
-  mkD('cDvzC',Object.keys(cm),Object.values(cm),'pie');
-  const sm={};dovizler.forEach(d=>{sm[d.sahibi]=(sm[d.sahibi]||0)+d.alisTL;});
-  mkD('cDvzS',Object.keys(sm),Object.values(sm));
-}
-
-// ══ INIT ══
-window.addEventListener('load',()=>{
-  document.getElementById('fi-t').value=new Date().toISOString().split('T')[0];
-  document.getElementById('di-t').value=new Date().toISOString().split('T')[0];
-  setTimeout(()=>{
-    document.getElementById('splash').style.opacity='0';
-    setTimeout(()=>{
-      document.getElementById('splash').style.display='none';
-      document.getElementById('app').style.display='flex';
-      renderAna();
-      // Kaydedilmiş kurları yükle, yoksa otomatik çek
-      if(!kurlar.usd&&!kurlar.eur&&!kurlar.altin&&!kurlar.gumus){
-        fetchAuto().then(()=>renderAna());
-      }
-    },400);
-  },900);
-});
-</script>
-</body>
-</html>
+      options:{responsive:true,plugins:{legend:{pos
