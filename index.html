@@ -667,7 +667,7 @@ function renderFonList(){
       </div>
       ${pct!==null?`<div class="ffoot"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:10px;color:var(--t3)">Getiri</span><span style="font-size:11px;font-family:'DM Mono',monospace;font-weight:700;color:${pos?'var(--g2)':'var(--r2)'}">${PCT(pct)}</span></div><div class="pbar"><div class="pbf ${pos?'p':'n'}" style="width:${Math.min(Math.abs(pct),50)/50*100}%"></div></div></div>`:''}
       <div class="fiyat-row">
-        <input class="fiyat-inp" id="fi2-${f.id}" type="number" placeholder="Güncel fiyat gir..." step="0.0001" inputmode="decimal" ${f.guncelFiyat?`value="${f.guncelFiyat}"`:''}> 
+        <input class="fiyat-inp" id="fi2-${f.id}" type="number" placeholder="Güncel fiyat gir..." step="0.0001" inputmode="decimal" ${f.guncelFiyat?'value="'+f.guncelFiyat+'"':''}> 
         <button class="fiyat-btn" onclick="guncelFiyatKaydet('${f.id}')">💾 Kaydet</button>
       </div>
     </div>`;
@@ -810,4 +810,4 @@ function renderCharts(){
   const fm={};fonlar.forEach(f=>{if(!f.guncelFiyat)return;const m=f.adet*f.alisFiyat,d=f.adet*f.guncelFiyat;if(!fm[f.kod])fm[f.kod]={m:0,d:0};fm[f.kod].m+=m;fm[f.kod].d+=d;});
   const labs=[],vals=[],cols=[];
   Object.entries(fm).forEach(([k,v])=>{const p=v.m>0?((v.d-v.m)/v.m)*100:0;labs.push(k);vals.push(+p.toFixed(2));cols.push(p>=0?'rgba(16,185,129,.8)':'rgba(239,68,68,.8)');});
-  if(charts.cFonKZ)charts.c
+  if(charts.cFonKZ)charts.
