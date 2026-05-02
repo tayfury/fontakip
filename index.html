@@ -388,7 +388,7 @@ const DVZ_DEF=[{"id":"d1","tarih":"2021-08-13","cins":"USD","sahibi":"TY","yer":
 
 // ══ STORAGE ══
 const DB={
-  load(k,d){try{const s=JSON.parse(localStorage.getItem(k)||'null');if(!s){this.save(k,d);return JSON.parse(JSON.stringify(d));}return s;}catch(e){return JSON.parse(JSON.stringify(d));}},
+  load(k,d){try{const s=JSON.parse(localStorage.getItem(k)||'null');if(!s){this.save(k,d);return JSON.parse(JSON.stringify(d));}if(k==='fonlar'&&s.length<d.length){this.save(k,d);return JSON.parse(JSON.stringify(d));}return s;}catch(e){return JSON.parse(JSON.stringify(d));}},
   save(k,v){localStorage.setItem(k,JSON.stringify(v));}
 };
 let fonlar=DB.load('fonlar',FON_DEF);
@@ -633,7 +633,7 @@ function fonExcelAktar(input){
     try{
       var wb=XLSX.read(e.target.result,{type:'array'});
       var sn=wb.SheetNames.find(function(n){return n.toLowerCase().includes('fiyat');});
-      if(!sn){toast('fiyatlar sayfasi bulunamadi','e');return;}
+      if(!sn){toast('Fiyatlar sayfasi bulunamadi','e');return;}
       var ws=wb.Sheets[sn];
       var data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
       var map={};
