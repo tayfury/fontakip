@@ -256,8 +256,12 @@ canvas{width:100%!important;max-height:200px}
       <!-- FON FİYAT PANELİ -->
       <div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:14px">
         <span>💹 Fon Fiyatları</span>
-        <label for="fon-excel-input" style="cursor:pointer;background:var(--gold);color:#000;padding:4px 10px;border-radius:var(--rs);font-size:10px;font-weight:800">📂 Excel Aktar</label>
-        <input type="file" id="fon-excel-input" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="fonExcelAktar(this)">
+        <div style="display:flex;gap:6px;align-items:center">
+          <label for="fon-excel-input" title="Sadece fon fiyatlarını güncelle" style="cursor:pointer;background:var(--gold);color:#000;padding:4px 10px;border-radius:var(--rs);font-size:10px;font-weight:800">📂 Fiyat Aktar</label>
+          <input type="file" id="fon-excel-input" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="fonExcelAktar(this)">
+          <label for="portfoy-excel-input" title="FON.xlsm dosyasını seçin — İşlemler sayfasındaki alış/satış kayıtlarından aktif pozisyonlar otomatik hesaplanır" style="cursor:pointer;background:var(--green);color:#fff;padding:4px 10px;border-radius:var(--rs);font-size:10px;font-weight:800">📥 FON.xlsm Yükle</label>
+          <input type="file" id="portfoy-excel-input" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="portfoyExcelYukle(this)">
+        </div>
       </div>
       <div id="fon-fiyat-panel" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:12px"></div>
 
@@ -624,6 +628,208 @@ function getDvzF(){
 }
 
 
+
+function portfoyExcelYukle(input){
+  var file=input.files[0];
+  if(!file){return;}
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(e.target.result,{type:'array',cellDates:false});
+
+      // ── IŞLEMLER sayfasını bul ─────────────────────────────
+      // Öncelik sırası: Islemler > Işlemler > ilk sayfa
+      var sn=null;
+      wb.SheetNames.forEach(function(n){
+        var nl=n.toLowerCase().replace(/ı/g,'i').replace(/ş/g,'s');
+        if(nl==='islemler'||nl==='işlemler'||nl.includes('islem')||nl.includes('işlem')) sn=n;
+      });
+      if(!sn){
+        // FonSepeti sayfasından da okunabilir (mevcut pozisyonlar)
+        wb.SheetNames.forEach(function(n){
+          var nl=n.toLowerCase();
+          if(nl.includes('sepet')||nl.includes('fonse')) sn=n;
+        });
+      }
+      if(!sn) sn=wb.SheetNames[0];
+
+      var ws=wb.Sheets[sn];
+      var data=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+
+      // ── Başlık satırını bul ────────────────────────────────
+      var baslik=-1;
+      var colTarih=-1,colFon=-1,colIslem=-1,colAdet=-1,colFiyat=-1,colSahip=-1,colYer=-1;
+
+      for(var r=0;r<Math.min(5,data.length);r++){
+        var row=data[r];
+        var found=false;
+        row.forEach(function(cell,ci){
+          var c=String(cell).toUpperCase()
+            .replace(/İ/g,'I').replace(/ı/g,'I')
+            .replace(/Ş/g,'S').replace(/ş/g,'S')
+            .replace(/Ğ/g,'G').replace(/ğ/g,'G')
+            .replace(/Ü/g,'U').replace(/ü/g,'U')
+            .replace(/Ö/g,'O').replace(/ö/g,'O')
+            .replace(/Ç/g,'C').replace(/ç/g,'C');
+          if(c==='TARIH'||c==='DATE') {colTarih=ci;found=true;}
+          if(c==='FON'||c==='KOD'||c==='FONKOD'||c==='FON KODU') colFon=ci;
+          if(c.includes('ISLEM')||c.includes('TUR')||c.includes('TIP')||c==='TYPE') colIslem=ci;
+          if(c==='ADET'||c==='MIKTAR'||c==='LOT'||c==='QUANTITY') colAdet=ci;
+          if(c==='FIYAT'||c==='BIRIM'||c==='PRICE'||c.includes('ALIS')) colFiyat=ci;
+          if(c==='SAHIP'||c==='KISI'||c==='OWNER'||c==='NAME') colSahip=ci;
+          if(c==='YER'||c==='KURUM'||c==='PLACE'||c==='LOCATION'||c==='LOCATION') colYer=ci;
+        });
+        if(found){baslik=r;break;}
+      }
+
+      if(baslik===-1||colFon===-1){
+        // FonSepeti formatı dene
+        return yukleFromFonSepeti(wb, input);
+      }
+
+      // ── İşlem kayıtlarını oku, net pozisyon hesapla ────────
+      // {fon+sahip+yer: {adet, maliyetToplam, islemler:[]}}
+      var pozMap={};
+
+      for(var ri=baslik+1;ri<data.length;ri++){
+        var row=data[ri];
+        if(!row||!row[colFon]) continue;
+
+        var fon=String(row[colFon]).trim().toUpperCase();
+        if(!fon||fon.length<2||fon.length>6) continue;
+
+        var islem=String(row[colIslem]||'Alış').trim().toUpperCase()
+          .replace(/ı/g,'I').replace(/ş/g,'S');
+        var adet=parseFloat(String(row[colAdet]||0).replace(',','.'));
+        var fiyat=parseFloat(String(row[colFiyat]||0).replace(',','.'));
+        var sahip=String(row[colSahip]||'').trim()||'TY';
+        var yer=String(row[colYer]||'').trim()||'KUV';
+
+        // Tarih: Excel sayısal tarih → ISO
+        var tarih=String(row[colTarih]||'').trim();
+        if(!isNaN(parseFloat(tarih))){
+          var excelDate=parseFloat(tarih);
+          var d=new Date((excelDate-25569)*86400*1000);
+          tarih=d.toISOString().split('T')[0];
+        } else if(tarih.includes('.')){
+          var tp=tarih.split('.');
+          if(tp.length===3) tarih=tp[2]+'-'+tp[1].padStart(2,'0')+'-'+tp[0].padStart(2,'0');
+        }
+        if(!tarih) tarih=new Date().toISOString().split('T')[0];
+
+        if(isNaN(adet)||adet===0) continue;
+
+        var key=fon+'|'+sahip+'|'+yer;
+        if(!pozMap[key]) pozMap[key]={fon:fon,sahip:sahip,yer:yer,adet:0,maliyetToplam:0,enSonTarih:tarih,enSonFiyat:fiyat};
+
+        var isAlis=(islem==='ALIS'||islem==='ALIŞ'||islem==='BUY'||islem==='PURCHASE'||islem==='');
+        if(isAlis){
+          pozMap[key].maliyetToplam+=adet*fiyat;
+          pozMap[key].adet+=adet;
+        } else {
+          // Satış — net maliyet oransal düşür
+          var satisToplam=adet*fiyat;
+          if(pozMap[key].adet>0){
+            var oran=adet/pozMap[key].adet;
+            pozMap[key].maliyetToplam-=oran*pozMap[key].maliyetToplam;
+          }
+          pozMap[key].adet-=adet;
+        }
+        // En son işlem tarihini güncelle
+        if(tarih>pozMap[key].enSonTarih){
+          pozMap[key].enSonTarih=tarih;
+          pozMap[key].enSonFiyat=fiyat;
+        }
+      }
+
+      // ── Net pozitif pozisyonları fon olarak kaydet ────────
+      var yeniFonlar=[];
+      Object.values(pozMap).forEach(function(p){
+        var netAdet=Math.round(p.adet*1000)/1000;
+        if(netAdet>0.001){
+          var ortMaliyet=p.maliyetToplam/netAdet;
+          yeniFonlar.push({
+            id:'f'+Date.now()+Math.random().toString(36).slice(2,5),
+            tarih:p.enSonTarih,
+            kod:p.fon,
+            sahibi:p.sahip,
+            kurum:p.yer,
+            adet:Math.round(netAdet),
+            alisFiyat:Math.round(ortMaliyet*1000000)/1000000,
+            guncelFiyat:null
+          });
+        }
+      });
+
+      if(yeniFonlar.length===0){
+        toast('Aktif pozisyon bulunamadı!','e',3000);
+        input.value='';return;
+      }
+
+      var msg='FON.xlsm — İşlemler sayfası okundu:\n\n';
+      msg+='📊 Aktif fon pozisyonu: '+yeniFonlar.length+' adet\n';
+      msg+='(Alış ve satışlar netleştirildi)\n\n';
+      msg+='Mevcut fon verileri SİLİNECEK ve Excel'+"'"+'teki veriler yüklenecek.\nDevam?';
+
+      if(!confirm(msg)){input.value='';return;}
+
+      fonlar=yeniFonlar;
+      DB.save('fonlar',fonlar);
+      renderAna();
+      input.value='';
+      toast('✅ '+yeniFonlar.length+' aktif fon pozisyonu yüklendi!','s',4000);
+
+    }catch(err){
+      console.error(err);
+      toast('Hata: '+err.message,'e',4000);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// FonSepeti sayfasından yükle (alternatif)
+function yukleFromFonSepeti(wb, input){
+  try{
+    var sn=null;
+    wb.SheetNames.forEach(function(n){
+      if(n==='FonSepeti'||n.toLowerCase().includes('sepet')) sn=n;
+    });
+    if(!sn){toast('Islemler veya FonSepeti sayfası bulunamadı','e');return;}
+
+    var ws=wb.Sheets[sn];
+    var data=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+
+    var yeniFonlar=[];
+    // FonSepeti: Fon Kodu | Fon Adı | Toplam Adet | Ort. Maliyet | ...
+    for(var ri=1;ri<data.length;ri++){
+      var row=data[ri];
+      var kod=String(row[0]||'').trim().toUpperCase();
+      var adet=parseFloat(String(row[2]||0).replace(',','.'));
+      var ortMaliyet=parseFloat(String(row[3]||0).replace(',','.'));
+      if(!kod||kod.length<2||isNaN(adet)||adet<=0) continue;
+
+      yeniFonlar.push({
+        id:'f'+Date.now()+ri+Math.random().toString(36).slice(2,4),
+        tarih:new Date().toISOString().split('T')[0],
+        kod:kod,sahibi:'TY',kurum:'KUV',
+        adet:Math.round(adet),
+        alisFiyat:Math.round(ortMaliyet*1000000)/1000000,
+        guncelFiyat:null
+      });
+    }
+
+    if(yeniFonlar.length===0){toast('Veri bulunamadı','e');input.value='';return;}
+    if(!confirm('FonSepeti sayfasından '+yeniFonlar.length+' fon yüklenecek. Devam?')){input.value='';return;}
+
+    fonlar=yeniFonlar;
+    DB.save('fonlar',fonlar);
+    renderAna();
+    input.value='';
+    toast('✅ '+yeniFonlar.length+' fon FonSepeti'+"'"+'ten yüklendi','s',4000);
+  }catch(err){
+    toast('Hata: '+err.message,'e');
+  }
+}
 
 function fonExcelAktar(input){
   var file=input.files[0];
