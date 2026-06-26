@@ -266,7 +266,10 @@ canvas{width:100%!important;max-height:200px}
       <div id="fon-fiyat-panel" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:12px"></div>
 
       <!-- FON LİSTESİ -->
-      <div class="stitle">🏦 Fonlarım <span style="float:right;font-size:10px;font-weight:400;text-transform:none;letter-spacing:0" id="fon-cnt"></span></div>
+      <div class="stitle" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span>🏦 Fonlarım <span style="font-size:10px;font-weight:400;letter-spacing:0" id="fon-cnt"></span></span>
+        <button id="klBtn" onclick="karalisteTemizle()" style="display:none;background:var(--red);color:#fff;border:none;border-radius:6px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer" title="Silinen fonları tekrar Excel yüklemesine dahil et">🚫 Kara Liste Sıfırla</button>
+      </div>
       <div class="fbar">
         <input type="text" id="ff-s" placeholder="Fon ara..." oninput="renderFonList()">
         <select id="ff-sh" onchange="renderFonList()"><option value="">Tüm sahipler</option></select>
@@ -392,10 +395,14 @@ const DVZ_DEF=[{"id":"d1","tarih":"2021-08-13","cins":"USD","sahibi":"TY","yer":
 
 // ══ STORAGE ══
 const DB={
-  load(k,d){try{const s=JSON.parse(localStorage.getItem(k)||'null');if(!s){this.save(k,d);return JSON.parse(JSON.stringify(d));}if(k==='fonlar'&&s.length<d.length){this.save(k,d);return JSON.parse(JSON.stringify(d));}return s;}catch(e){return JSON.parse(JSON.stringify(d));}},
-  save(k,v){localStorage.setItem(k,JSON.stringify(v));}
+  load(k,d){try{const s=JSON.parse(localStorage.getItem(k)||'null');if(s===null){this.save(k,d);return JSON.parse(JSON.stringify(d));}return s;}catch(e){return JSON.parse(JSON.stringify(d));}},
+  save(k,v){localStorage.setItem(k,JSON.stringify(v));},
+  loadSilinen(){try{return JSON.parse(localStorage.getItem('silinenFonlar')||'[]');}catch(e){return[];}},
+  saveSilinen(arr){localStorage.setItem('silinenFonlar',JSON.stringify(arr));}
 };
 let fonlar=DB.load('fonlar',FON_DEF);
+// Silinen fon "kod|sahip|kurum" anahtarları — Excel yüklemede geri gelmesin
+let silinenFonlar=DB.loadSilinen();
 let dovizler=DB.load('dovizler',DVZ_DEF);
 let kurlar=DB.load('kurlar',{usd:null,eur:null,altin:null,gumus:null}); // manuel/otomatik birleşik
 let charts={};
@@ -563,7 +570,26 @@ function cancelFon(){
   document.getElementById('fon-sb').textContent='Fon Ekle';document.getElementById('fon-sb').className='sbtn add';
   document.getElementById('fon-cb').style.display='none';
 }
-function silFon(id){if(!confirm('Bu fonu silmek istediğinize emin misiniz?'))return;fonlar=fonlar.filter(x=>x.id!==id);DB.save('fonlar',fonlar);renderAna();toast('🗑 Silindi','i');}
+function karalisteTemizle(){
+  if(silinenFonlar.length===0){toast('Kara liste zaten boş','i');return;}
+  if(!confirm('Kara listedeki '+silinenFonlar.length+' fon sıfırlanacak.\nBir sonraki FON.xlsm yüklemesinde tekrar gelecekler.\nDevam?'))return;
+  silinenFonlar=[];DB.saveSilinen([]);
+  var b=document.getElementById('klBtn');if(b)b.style.display='none';
+  toast('✅ Kara liste temizlendi','s',2000);
+}
+
+function silFon(id){
+  if(!confirm('Bu fonu silmek istediğinize emin misiniz?'))return;
+  var f=fonlar.find(x=>x.id===id);
+  if(f){
+    var k=f.kod+'|'+f.sahibi+'|'+f.kurum;
+    if(silinenFonlar.indexOf(k)===-1){silinenFonlar.push(k);DB.saveSilinen(silinenFonlar);}
+  }
+  fonlar=fonlar.filter(x=>x.id!==id);
+  DB.save('fonlar',fonlar);
+  renderAna();
+  toast('🗑 Silindi — Excel yüklemede geri gelmez','i',3000);
+}
 
 // ══ DÖVİZ CRUD ══
 function calcTL(){const k=parseFloat(document.getElementById('di-k').value)||0,m=parseFloat(document.getElementById('di-m').value)||0;document.getElementById('di-tl').value=k&&m?+(k*m).toFixed(2):'';}
@@ -748,6 +774,8 @@ function portfoyExcelYukle(input){
         var netAdet=Math.round(p.adet*1000)/1000;
         if(netAdet>0.001){
           var ortMaliyet=p.maliyetToplam/netAdet;
+          var anahtar=p.fon+'|'+p.sahip+'|'+p.yer;
+          if(silinenFonlar.indexOf(anahtar)!==-1) return; // kara listede, atlat
           yeniFonlar.push({
             id:'f'+Date.now()+Math.random().toString(36).slice(2,5),
             tarih:p.enSonTarih,
@@ -901,6 +929,8 @@ function renderFonList(){
   buildFF();
   const fil=getFonF();
   document.getElementById('fon-cnt').textContent=`${fil.length}/${fonlar.length}`;
+  var klb=document.getElementById('klBtn');
+  if(klb) klb.style.display=silinenFonlar.length>0?'inline-block':'none';
   const el=document.getElementById('fon-list');
   if(!fil.length){el.innerHTML=`<div class="empty"><div class="ei">📭</div><p>${fonlar.length?'Filtre eşleşmedi.':'Henüz fon yok.'}</p></div>`;return;}
   el.innerHTML=fil.map(f=>{
@@ -1067,35 +1097,4 @@ function renderCharts(){
   mkD('cFonKisi',Object.keys(km),Object.values(km));
   const fm={};fonlar.forEach(f=>{if(!f.guncelFiyat)return;const m=f.adet*f.alisFiyat,d=f.adet*f.guncelFiyat;if(!fm[f.kod])fm[f.kod]={m:0,d:0};fm[f.kod].m+=m;fm[f.kod].d+=d;});
   const labs=[],vals=[],cols=[];
-  Object.entries(fm).forEach(([k,v])=>{const p=v.m>0?((v.d-v.m)/v.m)*100:0;labs.push(k);vals.push(+p.toFixed(2));cols.push(p>=0?'rgba(16,185,129,.8)':'rgba(239,68,68,.8)');});
-  if(charts.cFonKZ)charts.cFonKZ.destroy();
-  if(labs.length)charts.cFonKZ=new Chart(document.getElementById('cFonKZ'),{type:'bar',
-    data:{labels:labs,datasets:[{data:vals,backgroundColor:cols,borderRadius:5,borderWidth:0}]},
-    options:{responsive:true,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{callback:v=>v+'%'}},y:{grid:{display:false}}}}
-  });
-  const cm={};dovizler.forEach(d=>{const k=ICON[d.cins]||''+ ' '+d.cins;cm[k]=(cm[k]||0)+d.alisTL;});
-  mkD('cDvzC',Object.keys(cm),Object.values(cm),'pie');
-  const sm={};dovizler.forEach(d=>{sm[d.sahibi]=(sm[d.sahibi]||0)+d.alisTL;});
-  mkD('cDvzS',Object.keys(sm),Object.values(sm));
-}
-
-// ══ INIT ══
-window.addEventListener('load',()=>{
-  document.getElementById('fi-t').value=new Date().toISOString().split('T')[0];
-  document.getElementById('di-t').value=new Date().toISOString().split('T')[0];
-  setTimeout(()=>{
-    document.getElementById('splash').style.opacity='0';
-    setTimeout(()=>{
-      document.getElementById('splash').style.display='none';
-      document.getElementById('app').style.display='flex';
-      renderAna();
-      // Kaydedilmiş kurları yükle, yoksa otomatik çek
-      if(!kurlar.usd&&!kurlar.eur&&!kurlar.altin&&!kurlar.gumus){
-        fetchAuto().then(()=>renderAna());
-      }
-    },400);
-  },900);
-});
-</script>
-</body>
-</html>
+  Object.entries(fm).forEach(([k,v])=>{const p=v.m>0?((v.d-v.m)/v.m)*10
