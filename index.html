@@ -1098,3 +1098,17 @@ function renderCharts(){
   const fm={};fonlar.forEach(f=>{if(!f.guncelFiyat)return;const m=f.adet*f.alisFiyat,d=f.adet*f.guncelFiyat;if(!fm[f.kod])fm[f.kod]={m:0,d:0};fm[f.kod].m+=m;fm[f.kod].d+=d;});
   const labs=[],vals=[],cols=[];
   Object.entries(fm).forEach(([k,v])=>{const p=v.m>0?((v.d-v.m)/v.m)*10
+
+    <script>
+(function(){
+  function reveal(){
+    var s=document.getElementById('splash');
+    if(s){ s.style.opacity='0'; s.style.display='none'; }
+    var a=document.getElementById('app');
+    if(a){ a.style.display='flex'; }
+  }
+  function boot(){ setTimeout(reveal,900); setTimeout(reveal,2500); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot);
+  else boot();
+})();
+</script>
